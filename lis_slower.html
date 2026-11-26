@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIS Slower Sensor</title>
+<script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+<style>
+ body{font-family:-apple-system,"Segoe UI",sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
+ header{padding:14px 16px;background:#1e293b;display:flex;justify-content:space-between;align-items:center}
+ h1{font-size:18px;margin:0}
+ #st{font-size:13px;padding:3px 10px;border-radius:12px;background:#475569}
+ #st.ok{background:#16a34a} #st.bad{background:#dc2626}
+ .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:12px}
+ .card{background:#1e293b;border-radius:12px;padding:12px}
+ .card .n{font-size:12px;color:#94a3b8}
+ .card .v{font-size:30px;font-weight:700;margin-top:4px}
+ .card .u{font-size:14px;color:#94a3b8;margin-left:3px}
+ #age{padding:0 16px 8px;color:#94a3b8;font-size:13px}
+ #cfg{padding:12px 16px;border-top:1px solid #334155}
+ #cfg input{width:100%;box-sizing:border-box;margin:4px 0 8px;padding:8px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#e2e8f0}
+ button{padding:8px 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-size:14px}
+</style>
+</head>
+<body>
+<header><h1>LIS Slower Sensor</h1><span id="st">연결 안됨</span></header>
+<div id="age">-</div>
+<div class="grid" id="grid"></div>
+<div id="cfg">
+ <label>Adafruit IO Username</label><input id="u" autocomplete="off">
+ <label>Adafruit IO Key (AIO key)</label><input id="k" type="password" autocomplete="off">
+ <button onclick="saveCfg()">저장 후 연결</button>
+ <p style="color:#94a3b8;font-size:12px">Feed: <b>lis-slower</b> (LIS_Slower). 값은 이 폰 브라우저에만 저장됩니다.</p>
+</div>
+<script>
+// s<index> -> label / unit  (index = sensor_enable[] position in firmware)
+var MAP={s0:["대기 #1 온도","°C"],s1:["대기 #1 습도","%"],s2:["대기 #2 온도","°C"],s3:["대기 #2 습도","%"],
+         s4:["대기 #3 온도","°C"],s5:["대기 #3 습도","%"],s6:["대기 #4 온도","°C"],s7:["대기 #4 습도","%"],
+         s8:["토양 #1 수분","%"],s9:["토양 #2 수분","%"]};
+var FEED="lis-slower", vals={}, lastRx=0, client=null;
+var $=function(i){return document.getElementById(i)};
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||"";localStorage.setItem(k,v)}catch(e){return ""}}
+/* QR/link login: page.html#u=<user>&k=<key>  -> saved in this browser, then removed from the address bar */
+if(location.hash.length>1){
+  var h=new URLSearchParams(location.hash.slice(1));
+  if(h.get("u")&&h.get("k")){ls("aio_user",h.get("u"));ls("aio_key",h.get("k"))}
+  history.replaceState(null,"",location.pathname+location.search);
+}
+$("u").value=ls("aio_user"); $("k").value=ls("aio_key");
+function setSt(t,c){var s=$("st");s.textContent=t;s.className=c||""}
+function saveCfg(){ls("aio_user",$("u").value.trim());ls("aio_key",$("k").value.trim());connect()}
+function connect(){
+  var u=ls("aio_user"),k=ls("aio_key"); if(!u||!k){setSt("키 입력 필요","bad");return}
+  if(client){try{client.end(true)}catch(e){}}
+  setSt("연결 중…");
+  client=mqtt.connect("wss://io.adafruit.com:443/mqtt/",{username:u,password:k,clientId:"lisweb"+Math.random().toString(16).slice(2,8),reconnectPeriod:3000});
+  var topic=u+"/feeds/"+FEED;
+  client.on("connect",function(){setSt("연결됨","ok");client.subscribe(topic);client.publish(topic+"/get","")});
+  client.on("close",function(){setSt("재연결 중…","bad")});
+  client.on("error",function(){setSt("인증/연결 오류","bad")});
+  client.on("message",function(t,m){parse(m.toString())});
+}
+function parse(s){          // "s0=23.45,s1=50.10"
+  s.split(",").forEach(function(p){var a=p.split("=");if(a.length==2&&!isNaN(parseFloat(a[1])))vals[a[0].trim()]=parseFloat(a[1])});
+  lastRx=Date.now();
+}
+function render(){          // runs every 1 s
+  var h="",keys=Object.keys(vals).sort(function(a,b){return parseInt(a.slice(1))-parseInt(b.slice(1))});
+  keys.forEach(function(k){var m=MAP[k]||[k,""];h+='<div class="card"><div class="n">'+m[0]+'</div><div class="v">'+vals[k].toFixed(1)+'<span class="u">'+m[1]+'</span></div></div>'});
+  $("grid").innerHTML=h||'<div class="card">데이터 대기 중…</div>';
+  $("age").textContent=lastRx?("마지막 수신: "+Math.round((Date.now()-lastRx)/1000)+"초 전"):"-";
+}
+setInterval(render,1000); render(); connect();
+</script>
+</body>
+</html>
