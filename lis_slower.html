@@ -13,8 +13,9 @@
  #st.ok{background:#16a34a} #st.bad{background:#dc2626}
  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:12px}
  .card{background:#1e293b;border-radius:12px;padding:12px}
- .card .n{font-size:12px;color:#94a3b8}
- .card .v{font-size:30px;font-weight:700;margin-top:4px}
+ .card .n{font-size:13px;color:#cbd5e1;font-weight:600} .card .m{font-size:11px;color:#64748b;font-weight:400;margin-left:4px}
+ .row{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px} .row .l{font-size:12px;color:#94a3b8}
+ .card .v{font-size:26px;font-weight:700}
  .card .u{font-size:14px;color:#94a3b8;margin-left:3px}
  #age{padding:0 16px 8px;color:#94a3b8;font-size:13px}
  #cfg{padding:12px 16px;border-top:1px solid #334155}
@@ -33,11 +34,16 @@
  <p style="color:#94a3b8;font-size:12px">Feed: <b>lis-slower</b> (LIS_Slower). 값은 이 폰 브라우저에만 저장됩니다.</p>
 </div>
 <script>
-// s<index> -> label / unit  (index = sensor_enable[] position in firmware)
-var MAP={s0:["대기 #1 온도","°C"],s1:["대기 #1 습도","%"],s2:["대기 #2 온도","°C"],s3:["대기 #2 습도","%"],
-         s4:["대기 #3 온도","°C"],s5:["대기 #3 습도","%"],s6:["대기 #4 온도","°C"],s7:["대기 #4 습도","%"],
-         s8:["토양 #1 수분","%"],s9:["토양 #2 수분","%"]};
-var FEED="lis-slower", vals={}, lastRx=0, client=null;
+// Sensor types defined in the STM32 firmware (sensor.c): id -> name + value keys
+//  RK330-01A (31..34): t=air temperature, h=air humidity
+//  RK520-02  (62,63) : t=soil temperature, m=soil moisture
+var TYPES={
+ 31:{n:"대기 온습도 #1",m:"RK330-01A"},32:{n:"대기 온습도 #2",m:"RK330-01A"},
+ 33:{n:"대기 온습도 #3",m:"RK330-01A"},34:{n:"대기 온습도 #4",m:"RK330-01A"},
+ 62:{n:"토양 #1",m:"RK520-02"},63:{n:"토양 #2",m:"RK520-02"}};
+var KEYS={t:["온도","°C"],h:["습도","%"],m:["토양수분","%"]};
+var SOIL={62:1,63:1};
+var FEED="lis-slower", sensors={}, lastRx=0, client=null;
 var $=function(i){return document.getElementById(i)};
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||"";localStorage.setItem(k,v)}catch(e){return ""}}
 /* QR/link login: page.html#u=<user>&k=<key>  -> saved in this browser, then removed from the address bar */
@@ -60,13 +66,28 @@ function connect(){
   client.on("error",function(){setSt("인증/연결 오류","bad")});
   client.on("message",function(t,m){parse(m.toString())});
 }
-function parse(s){          // "s0=23.45,s1=50.10"
-  s.split(",").forEach(function(p){var a=p.split("=");if(a.length==2&&!isNaN(parseFloat(a[1])))vals[a[0].trim()]=parseFloat(a[1])});
+function parse(s){          // "31:t=23.45,h=50.10;62:t=27.80,m=60.00"
+  s.split(";").forEach(function(g){
+    var a=g.split(":"); if(a.length!=2)return;
+    var id=parseInt(a[0]); if(isNaN(id))return;
+    var o={};
+    a[1].split(",").forEach(function(p){var kv=p.split("=");if(kv.length==2&&!isNaN(parseFloat(kv[1])))o[kv[0].trim()]=parseFloat(kv[1])});
+    if(Object.keys(o).length)sensors[id]=o;
+  });
   lastRx=Date.now();
 }
 function render(){          // runs every 1 s
-  var h="",keys=Object.keys(vals).sort(function(a,b){return parseInt(a.slice(1))-parseInt(b.slice(1))});
-  keys.forEach(function(k){var m=MAP[k]||[k,""];h+='<div class="card"><div class="n">'+m[0]+'</div><div class="v">'+vals[k].toFixed(1)+'<span class="u">'+m[1]+'</span></div></div>'});
+  var h="",ids=Object.keys(sensors).map(Number).sort(function(a,b){return a-b});
+  ids.forEach(function(id){
+    var T=TYPES[id]||{n:"센서 "+id,m:""},o=sensors[id];
+    h+='<div class="card"><div class="n">'+T.n+(T.m?' <span class="m">'+T.m+'</span>':'')+'</div>';
+    ["t","h","m"].forEach(function(k){
+      if(o[k]===undefined)return;
+      var nm=KEYS[k][0];if(k==="t"&&SOIL[id])nm="지온";
+      h+='<div class="row"><span class="l">'+nm+'</span><span class="v">'+o[k].toFixed(1)+'<span class="u">'+KEYS[k][1]+'</span></span></div>';
+    });
+    h+='</div>';
+  });
   $("grid").innerHTML=h||'<div class="card">데이터 대기 중…</div>';
   $("age").textContent=lastRx?("마지막 수신: "+Math.round((Date.now()-lastRx)/1000)+"초 전"):"-";
 }
