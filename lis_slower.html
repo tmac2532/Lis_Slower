@@ -8,6 +8,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="LIS Slower">
 <title>LIS Slower · Sensor Monitor</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="lis_icon_192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 :root{
@@ -91,9 +94,7 @@ footer{margin-top:18px;text-align:center;font-size:11.5px;color:var(--muted)}
 </head>
 <body>
 <header>
-  <div class="logo" aria-hidden="true">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F5F55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7z"/><path d="M12 15c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/><path d="M5 21h14"/></svg>
-  </div>
+  <div class="logo"><img src="lis_logo_header.png" alt="LIS" width="32" height="32" style="display:block"></div>
   <div class="brand"><b>LIS Slower</b><span>Smart Farm Sensor Monitor</span></div>
   <div class="pill wait" id="st"><span class="dot"></span><span id="stText">연결 중…</span></div>
   <button class="icon-btn" id="gear" type="button" aria-label="연결 설정" onclick="openSheet()">

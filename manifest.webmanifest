@@ -1,0 +1,13 @@
+{
+  "name": "LIS Slower Sensor Monitor",
+  "short_name": "LIS Slower",
+  "start_url": "./lis_slower.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0F5F55",
+  "icons": [
+    { "src": "lis_icon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "lis_icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
