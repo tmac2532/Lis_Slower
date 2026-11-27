@@ -2,96 +2,276 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LIS Slower Sensor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0F5F55">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LIS Slower">
+<title>LIS Slower · Sensor Monitor</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
- body{font-family:-apple-system,"Segoe UI",sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
- header{padding:14px 16px;background:#1e293b;display:flex;justify-content:space-between;align-items:center}
- h1{font-size:18px;margin:0}
- #st{font-size:13px;padding:3px 10px;border-radius:12px;background:#475569}
- #st.ok{background:#16a34a} #st.bad{background:#dc2626}
- .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:12px}
- .card{background:#1e293b;border-radius:12px;padding:12px}
- .card .n{font-size:13px;color:#cbd5e1;font-weight:600} .card .m{font-size:11px;color:#64748b;font-weight:400;margin-left:4px}
- .row{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px} .row .l{font-size:12px;color:#94a3b8}
- .card .v{font-size:26px;font-weight:700}
- .card .u{font-size:14px;color:#94a3b8;margin-left:3px}
- #age{padding:0 16px 8px;color:#94a3b8;font-size:13px}
- #cfg{padding:12px 16px;border-top:1px solid #334155}
- #cfg input{width:100%;box-sizing:border-box;margin:4px 0 8px;padding:8px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:#e2e8f0}
- button{padding:8px 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-size:14px}
+:root{
+  --bg:#F2F5F4; --card:#FFFFFF; --line:#E1E7E4; --text:#18211E; --sub:#4A5652; --muted:#74807B;
+  --brand:#0F5F55; --brand-2:#E3F1EE; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+  --temp:#E8590C; --hum:#1C7ED6; --soil:#7C5A2E;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased}
+button{font-family:inherit}
+
+/* ---------- header ---------- */
+header{position:sticky;top:0;z-index:5;background:var(--brand);color:#fff;
+  padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;align-items:center;gap:12px}
+.logo{width:38px;height:38px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand{flex:1;min-width:0;line-height:1.2}
+.brand b{display:block;font-size:17px;letter-spacing:.2px}
+.brand span{display:block;font-size:12px;color:#BFE0D9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.14);font-size:12.5px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#9CA3AF;flex-shrink:0}
+.pill.ok .dot{background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}
+.pill.wait .dot{background:#FBBF24}
+.pill.bad .dot{background:#F87171}
+.icon-btn{width:38px;height:38px;border:0;border-radius:10px;background:rgba(255,255,255,.14);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+
+/* ---------- layout ---------- */
+main{max-width:760px;margin:0 auto;padding:14px 14px calc(env(safe-area-inset-bottom) + 24px)}
+.summary{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.summary-top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--sub)}
+.summary-top .fresh{display:flex;align-items:center;gap:6px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{background:#F6F8F7;border-radius:12px;padding:10px 10px 9px}
+.kpi .k{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:22px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:13px;font-weight:500;color:var(--muted);margin-left:2px}
+h2{font-size:14px;color:var(--sub);margin:20px 4px 10px;display:flex;align-items:center;gap:8px}
+h2 .count{font-size:12px;font-weight:600;color:var(--brand);background:var(--brand-2);padding:1px 8px;border-radius:999px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:640px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ---------- sensor card ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 12px 13px;display:flex;flex-direction:column;gap:10px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.card-head .nm{font-size:14px;font-weight:700}
+.card-head .md{font-size:11px;color:var(--muted);margin-top:1px}
+.state{font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#E7F6EC;color:#15803D;white-space:nowrap}
+.state.stale{background:#FEF3C7;color:#92400E}
+.metric{display:flex;flex-direction:column;gap:5px}
+.metric-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.metric-row .lb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}
+.metric-row .val{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.metric-row .val small{font-size:13px;font-weight:500;color:var(--muted);margin-left:2px}
+.bar{height:5px;border-radius:3px;background:#EDF1EF;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px}
+.skeleton{height:132px;border-radius:16px;background:linear-gradient(90deg,#E9EEEC 0,#F4F7F6 50%,#E9EEEC 100%);background-size:200% 100%;animation:sk 1.2s infinite}
+@keyframes sk{from{background-position:100% 0}to{background-position:-100% 0}}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:6px 0 2px}
+footer{margin-top:18px;text-align:center;font-size:11.5px;color:var(--muted)}
+
+/* ---------- settings sheet ---------- */
+.scrim{position:fixed;inset:0;background:rgba(15,23,20,.45);display:none;z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:#fff;border-radius:20px 20px 0 0;
+  padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);max-width:560px;margin:0 auto;display:none;
+  box-shadow:0 -8px 30px rgba(0,0,0,.15)}
+.open .scrim,.open .sheet{display:block}
+.sheet h3{margin:0 0 4px;font-size:17px}
+.sheet p.desc{margin:0 0 14px;font-size:13px;color:var(--muted)}
+.sheet label{display:block;font-size:13px;font-weight:600;color:var(--sub);margin:10px 0 6px}
+.sheet input{width:100%;font-size:16px;padding:11px 12px;border:1px solid #CBD5D1;border-radius:10px;background:#fff;color:var(--text)}
+.sheet input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+.msg{font-size:13px;margin:10px 0 0;min-height:18px;color:var(--bad)}
+.actions{display:flex;gap:8px;margin-top:14px}
+.btn{flex:1;height:46px;border:0;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}
+.btn.primary{background:var(--brand);color:#fff}
+.btn.ghost{background:#EEF2F0;color:var(--sub)}
+.link-btn{margin-top:12px;border:0;background:none;color:var(--bad);font-size:13px;cursor:pointer;padding:4px 0}
+.note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
 </style>
 </head>
 <body>
-<header><h1>LIS Slower Sensor</h1><span id="st">연결 안됨</span></header>
-<div id="age">-</div>
-<div class="grid" id="grid"></div>
-<div id="cfg">
- <label>Adafruit IO Username</label><input id="u" autocomplete="off">
- <label>Adafruit IO Key (AIO key)</label><input id="k" type="password" autocomplete="off">
- <button onclick="saveCfg()">저장 후 연결</button>
- <p style="color:#94a3b8;font-size:12px">Feed: <b>lis-slower</b> (LIS_Slower). 값은 이 폰 브라우저에만 저장됩니다.</p>
+<header>
+  <div class="logo" aria-hidden="true">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F5F55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7z"/><path d="M12 15c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/><path d="M5 21h14"/></svg>
+  </div>
+  <div class="brand"><b>LIS Slower</b><span>Smart Farm Sensor Monitor</span></div>
+  <div class="pill wait" id="st"><span class="dot"></span><span id="stText">연결 중…</span></div>
+  <button class="icon-btn" id="gear" type="button" aria-label="연결 설정" onclick="openSheet()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <section class="summary" aria-label="요약">
+    <div class="summary-top">
+      <span class="fresh"><span class="dot" id="freshDot"></span><span id="age">수신 대기 중</span></span>
+      <span id="feedName">Feed · lis-slower</span>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">평균 기온</div><div class="v" id="kT">--<small>°C</small></div></div>
+      <div class="kpi"><div class="k">평균 습도</div><div class="v" id="kH">--<small>%</small></div></div>
+      <div class="kpi"><div class="k">토양 수분</div><div class="v" id="kM">--<small>%</small></div></div>
+    </div>
+  </section>
+
+  <h2>대기 온습도 <span class="count" id="cAir">0</span></h2>
+  <div class="grid" id="gridAir"></div>
+
+  <h2>토양 <span class="count" id="cSoil">0</span></h2>
+  <div class="grid" id="gridSoil"></div>
+
+  <footer>LIS Slower · Adafruit IO 실시간 수신</footer>
+</main>
+
+<!-- 연결 설정 (키가 없거나 인증 오류일 때만 자동으로 열림, 연결되면 숨김) -->
+<div id="sheetWrap">
+  <div class="scrim" onclick="closeSheet()"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h3 id="sheetTitle">연결 설정</h3>
+    <p class="desc">Adafruit IO 계정으로 센서 데이터를 받습니다. 키는 이 폰 브라우저에만 저장됩니다.</p>
+    <label for="u">Username</label>
+    <input id="u" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="k">AIO Key</label>
+    <input id="k" type="password" autocomplete="off" placeholder="aio_...">
+    <p class="msg" id="msg"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="cancelBtn" onclick="closeSheet()">닫기</button>
+      <button class="btn primary" type="button" onclick="saveCfg()">저장 후 연결</button>
+    </div>
+    <button class="link-btn" type="button" onclick="clearCfg()">저장된 키 지우기</button>
+    <p class="note">QR 자동 로그인 링크로 한 번 열면 다음부터는 주소만 열어도 자동으로 연결됩니다.</p>
+  </div>
 </div>
+
 <script>
-// Sensor types defined in the STM32 firmware (sensor.c): id -> name + value keys
+// Sensor types defined in the STM32 firmware (sensor.c): id -> name + model
 //  RK330-01A (31..34): t=air temperature, h=air humidity
 //  RK520-02  (62,63) : t=soil temperature, m=soil moisture
 var TYPES={
  31:{n:"대기 온습도 #1",m:"RK330-01A"},32:{n:"대기 온습도 #2",m:"RK330-01A"},
  33:{n:"대기 온습도 #3",m:"RK330-01A"},34:{n:"대기 온습도 #4",m:"RK330-01A"},
  62:{n:"토양 #1",m:"RK520-02"},63:{n:"토양 #2",m:"RK520-02"}};
-var KEYS={t:["온도","°C"],h:["습도","%"],m:["토양수분","%"]};
 var SOIL={62:1,63:1};
-var FEED="lis-slower", sensors={}, lastRx=0, client=null;
+var FEED="lis-slower", STALE_SEC=120;
+var sensors={}, seen={}, lastRx=0, client=null, everConnected=false;
 var $=function(i){return document.getElementById(i)};
-function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||"";localStorage.setItem(k,v)}catch(e){return ""}}
-/* QR/link login: page.html#u=<user>&k=<key>  -> saved in this browser, then removed from the address bar */
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||"";if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return ""}}
+
+/* QR/link login: page.html#u=<user>&k=<key> -> saved in this browser, then removed from the address bar */
 if(location.hash.length>1){
-  var h=new URLSearchParams(location.hash.slice(1));
-  if(h.get("u")&&h.get("k")){ls("aio_user",h.get("u"));ls("aio_key",h.get("k"))}
+  var hp=new URLSearchParams(location.hash.slice(1));
+  if(hp.get("u")&&hp.get("k")){ls("aio_user",hp.get("u"));ls("aio_key",hp.get("k"))}
   history.replaceState(null,"",location.pathname+location.search);
 }
-$("u").value=ls("aio_user"); $("k").value=ls("aio_key");
-function setSt(t,c){var s=$("st");s.textContent=t;s.className=c||""}
-function saveCfg(){ls("aio_user",$("u").value.trim());ls("aio_key",$("k").value.trim());connect()}
+var DEMO=/[?&]demo=1/.test(location.search);   // 화면 확인용: lis_slower.html?demo=1
+
+/* ---------- 상태 / 설정 화면 ---------- */
+function setSt(text,cls){$("st").className="pill "+(cls||"wait");$("stText").textContent=text}
+function openSheet(msg){
+  $("u").value=ls("aio_user"); $("k").value=ls("aio_key");
+  $("msg").textContent=msg||"";
+  $("cancelBtn").style.display=(ls("aio_user")&&ls("aio_key"))?"":"none";
+  $("sheetWrap").className="open";
+}
+function closeSheet(){$("sheetWrap").className=""}
+function saveCfg(){
+  var u=$("u").value.replace(/\s/g,""), k=$("k").value.replace(/\s/g,"");
+  if(!u||!k){$("msg").textContent="Username 과 AIO Key 를 모두 입력하세요.";return}
+  ls("aio_user",u); ls("aio_key",k); everConnected=false;
+  $("msg").textContent=""; closeSheet(); connect();
+}
+function clearCfg(){
+  ls("aio_user",null); ls("aio_key",null);
+  if(client){try{client.end(true)}catch(e){} client=null}
+  setSt("키 없음","bad"); openSheet("저장된 키를 지웠습니다.");
+}
+
+/* ---------- MQTT ---------- */
 function connect(){
-  var u=ls("aio_user"),k=ls("aio_key"); if(!u||!k){setSt("키 입력 필요","bad");return}
+  if(DEMO){setSt("데모","ok");return}
+  var u=ls("aio_user"),k=ls("aio_key");
+  if(!u||!k){setSt("키 입력 필요","bad");openSheet();return}
   if(client){try{client.end(true)}catch(e){}}
-  setSt("연결 중…");
-  client=mqtt.connect("wss://io.adafruit.com:443/mqtt/",{username:u,password:k,clientId:"lisweb"+Math.random().toString(16).slice(2,8),reconnectPeriod:3000});
+  setSt("연결 중…","wait");
+  client=mqtt.connect("wss://io.adafruit.com:443/mqtt/",{username:u,password:k,
+    clientId:"lisweb"+Math.random().toString(16).slice(2,8),reconnectPeriod:3000});
   var topic=u+"/feeds/"+FEED;
-  client.on("connect",function(){setSt("연결됨","ok");client.subscribe(topic);client.publish(topic+"/get","")});
-  client.on("close",function(){setSt("재연결 중…","bad")});
-  client.on("error",function(){setSt("인증/연결 오류","bad")});
+  client.on("connect",function(){
+    everConnected=true; setSt("연결됨","ok"); closeSheet();   // 연결되면 설정 화면 숨김
+    client.subscribe(topic); client.publish(topic+"/get","");
+  });
+  client.on("reconnect",function(){setSt("재연결 중…","wait")});
+  client.on("offline",function(){setSt("오프라인","bad")});
+  client.on("error",function(err){
+    var auth=/auth|Not authorized|Bad user/i.test(err&&err.message||"");
+    setSt(auth?"인증 오류":"연결 오류","bad");
+    if(auth||!everConnected){       // 처음부터 연결이 안 되면 설정 화면을 다시 보여줌
+      try{client.end(true)}catch(e){}
+      openSheet(auth?"인증에 실패했습니다. Username / AIO Key 를 확인하세요.":"연결하지 못했습니다. 네트워크와 키를 확인하세요.");
+    }
+  });
   client.on("message",function(t,m){parse(m.toString())});
 }
 function parse(s){          // "31:t=23.45,h=50.10;62:t=27.80,m=60.00"
+  var now=Date.now();
   s.split(";").forEach(function(g){
     var a=g.split(":"); if(a.length!=2)return;
-    var id=parseInt(a[0]); if(isNaN(id))return;
+    var id=parseInt(a[0],10); if(isNaN(id))return;
     var o={};
     a[1].split(",").forEach(function(p){var kv=p.split("=");if(kv.length==2&&!isNaN(parseFloat(kv[1])))o[kv[0].trim()]=parseFloat(kv[1])});
-    if(Object.keys(o).length)sensors[id]=o;
+    if(Object.keys(o).length){sensors[id]=o;seen[id]=now}
   });
-  lastRx=Date.now();
+  lastRx=now; render();
 }
-function render(){          // runs every 1 s
-  var h="",ids=Object.keys(sensors).map(Number).sort(function(a,b){return a-b});
-  ids.forEach(function(id){
-    var T=TYPES[id]||{n:"센서 "+id,m:""},o=sensors[id];
-    h+='<div class="card"><div class="n">'+T.n+(T.m?' <span class="m">'+T.m+'</span>':'')+'</div>';
-    ["t","h","m"].forEach(function(k){
-      if(o[k]===undefined)return;
-      var nm=KEYS[k][0];if(k==="t"&&SOIL[id])nm="지온";
-      h+='<div class="row"><span class="l">'+nm+'</span><span class="v">'+o[k].toFixed(1)+'<span class="u">'+KEYS[k][1]+'</span></span></div>';
-    });
-    h+='</div>';
-  });
-  $("grid").innerHTML=h||'<div class="card">데이터 대기 중…</div>';
-  $("age").textContent=lastRx?("마지막 수신: "+Math.round((Date.now()-lastRx)/1000)+"초 전"):"-";
+
+/* ---------- 화면 ---------- */
+var ICON={
+ t:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8590C" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/></svg>',
+ h:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1C7ED6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>',
+ m:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5A2E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 15h18M5 19h14"/><path d="M12 12V4M9 7l3-3 3 3"/></svg>'};
+function metric(key,label,value,unit,color){
+  var bar=(unit==="%")?'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,value)).toFixed(0)+'%;background:'+color+'"></i></div>':'';
+  return '<div class="metric"><div class="metric-row"><span class="lb">'+ICON[key]+label+'</span>'+
+         '<span class="val">'+value.toFixed(1)+'<small>'+unit+'</small></span></div>'+bar+'</div>';
 }
-setInterval(render,1000); render(); connect();
+function card(id){
+  var T=TYPES[id]||{n:"센서 "+id,m:""}, o=sensors[id];
+  var stale=(Date.now()-(seen[id]||0))/1000>STALE_SEC;
+  var h='<div class="card"><div class="card-head"><div><div class="nm">'+T.n+'</div><div class="md">'+(T.m||("ID "+id))+'</div></div>'+
+        '<span class="state'+(stale?' stale':'')+'">'+(stale?'지연':'정상')+'</span></div>';
+  if(o.t!==undefined)h+=metric("t",SOIL[id]?"지온":"온도",o.t,"°C","var(--temp)");
+  if(o.h!==undefined)h+=metric("h","습도",o.h,"%","var(--hum)");
+  if(o.m!==undefined)h+=metric("m","토양수분",o.m,"%","var(--soil)");
+  return h+'</div>';
+}
+function avg(arr){return arr.length?arr.reduce(function(a,b){return a+b},0)/arr.length:null}
+function kpi(el,v,unit){$(el).innerHTML=(v===null?"--":v.toFixed(1))+'<small>'+unit+'</small>'}
+function render(){
+  var ids=Object.keys(sensors).map(Number).sort(function(a,b){return a-b});
+  var air=ids.filter(function(i){return !SOIL[i]}), soil=ids.filter(function(i){return SOIL[i]});
+  var waiting=!lastRx;
+  var sk='<div class="skeleton"></div><div class="skeleton"></div>';
+  $("gridAir").innerHTML=air.length?air.map(card).join(""):(waiting?sk:'<div class="empty">수신된 대기 센서가 없습니다</div>');
+  $("gridSoil").innerHTML=soil.length?soil.map(card).join(""):(waiting?sk:'<div class="empty">수신된 토양 센서가 없습니다</div>');
+  $("cAir").textContent=air.length; $("cSoil").textContent=soil.length;
+
+  kpi("kT",avg(air.filter(function(i){return sensors[i].t!==undefined}).map(function(i){return sensors[i].t})),"°C");
+  kpi("kH",avg(air.filter(function(i){return sensors[i].h!==undefined}).map(function(i){return sensors[i].h})),"%");
+  kpi("kM",avg(soil.filter(function(i){return sensors[i].m!==undefined}).map(function(i){return sensors[i].m})),"%");
+
+  var age=lastRx?Math.round((Date.now()-lastRx)/1000):-1;
+  $("age").textContent=age<0?"수신 대기 중":(age<5?"방금 수신":(age<60?age+"초 전 수신":Math.floor(age/60)+"분 전 수신"));
+  $("freshDot").style.background=age<0?"#9CA3AF":(age>STALE_SEC?"var(--warn)":"var(--ok)");
+}
+setInterval(render,1000);
+render();
+
+if(DEMO){   // 화면 확인용 가짜 데이터
+  var demo=function(){var r=function(a,b){return (a+Math.random()*b).toFixed(2)};
+    parse("31:t="+r(22,2)+",h="+r(55,8)+";32:t="+r(23,2)+",h="+r(52,8)+";33:t="+r(21,2)+",h="+r(60,8)+";34:t="+r(22,2)+",h="+r(58,8)+";62:t="+r(18,2)+",m="+r(35,10)+";63:t="+r(19,2)+",m="+r(41,10))};
+  demo(); setInterval(demo,5000);
+}
+connect();
 </script>
 </body>
 </html>
