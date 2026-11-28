@@ -115,7 +115,7 @@ footer{margin-top:18px;text-align:center;font-size:11.5px;color:var(--muted)}
     </div>
   </section>
 
-  <h2>대기 온습도 <span class="count" id="cAir">0</span></h2>
+  <h2>대기 온습도 · CO2 <span class="count" id="cAir">0</span></h2>
   <div class="grid" id="gridAir"></div>
 
   <h2>토양 <span class="count" id="cSoil">0</span></h2>
@@ -146,11 +146,12 @@ footer{margin-top:18px;text-align:center;font-size:11.5px;color:var(--muted)}
 
 <script>
 // Sensor types defined in the STM32 firmware (sensor.c): id -> name + model
-//  RK330-01A (31..34): t=air temperature, h=air humidity
+//  RK330-01A (31,32) : t=air temperature, h=air humidity
+//  RK300-03  (41,42) : c=CO2 ppm   (2026-11-27 : air #3/#4 -> CO2)
 //  RK520-02  (62,63) : t=soil temperature, m=soil moisture
 var TYPES={
  31:{n:"대기 온습도 #1",m:"RK330-01A"},32:{n:"대기 온습도 #2",m:"RK330-01A"},
- 33:{n:"대기 온습도 #3",m:"RK330-01A"},34:{n:"대기 온습도 #4",m:"RK330-01A"},
+ 41:{n:"CO2 #1",m:"RK300-03"},42:{n:"CO2 #2",m:"RK300-03"},
  62:{n:"토양 #1",m:"RK520-02"},63:{n:"토양 #2",m:"RK520-02"}};
 var SOIL={62:1,63:1};
 var FEED="lis-slower", STALE_SEC=120;
@@ -229,11 +230,13 @@ function parse(s){          // "31:t=23.45,h=50.10;62:t=27.80,m=60.00"
 var ICON={
  t:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8590C" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/></svg>',
  h:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1C7ED6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>',
+ c:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F5F55" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 1 0 6 16.3"/><path d="M6 19h11.5"/></svg>',
  m:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5A2E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 15h18M5 19h14"/><path d="M12 12V4M9 7l3-3 3 3"/></svg>'};
 function metric(key,label,value,unit,color){
-  var bar=(unit==="%")?'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,value)).toFixed(0)+'%;background:'+color+'"></i></div>':'';
+  var pct=(unit==="%")?value:(unit==="ppm"?value/20:null);   /* CO2 bar : 0~2000 ppm */
+  var bar=(pct!==null)?'<div class="bar"><i style="width:'+Math.max(0,Math.min(100,pct)).toFixed(0)+'%;background:'+color+'"></i></div>':'';
   return '<div class="metric"><div class="metric-row"><span class="lb">'+ICON[key]+label+'</span>'+
-         '<span class="val">'+value.toFixed(1)+'<small>'+unit+'</small></span></div>'+bar+'</div>';
+         '<span class="val">'+value.toFixed(unit==="ppm"?0:1)+'<small>'+unit+'</small></span></div>'+bar+'</div>';
 }
 function card(id){
   var T=TYPES[id]||{n:"센서 "+id,m:""}, o=sensors[id];
@@ -243,6 +246,7 @@ function card(id){
   if(o.t!==undefined)h+=metric("t",SOIL[id]?"지온":"온도",o.t,"°C","var(--temp)");
   if(o.h!==undefined)h+=metric("h","습도",o.h,"%","var(--hum)");
   if(o.m!==undefined)h+=metric("m","토양수분",o.m,"%","var(--soil)");
+  if(o.c!==undefined)h+=metric("c","CO2",o.c,"ppm","var(--brand)");
   return h+'</div>';
 }
 function avg(arr){return arr.length?arr.reduce(function(a,b){return a+b},0)/arr.length:null}
@@ -269,7 +273,7 @@ render();
 
 if(DEMO){   // 화면 확인용 가짜 데이터
   var demo=function(){var r=function(a,b){return (a+Math.random()*b).toFixed(2)};
-    parse("31:t="+r(22,2)+",h="+r(55,8)+";32:t="+r(23,2)+",h="+r(52,8)+";33:t="+r(21,2)+",h="+r(60,8)+";34:t="+r(22,2)+",h="+r(58,8)+";62:t="+r(18,2)+",m="+r(35,10)+";63:t="+r(19,2)+",m="+r(41,10))};
+    parse("31:t="+r(22,2)+",h="+r(55,8)+";32:t="+r(23,2)+",h="+r(52,8)+";41:c="+r(450,300)+";42:c="+r(500,300)+";62:t="+r(18,2)+",m="+r(35,10)+";63:t="+r(19,2)+",m="+r(41,10))};
   demo(); setInterval(demo,5000);
 }
 connect();
